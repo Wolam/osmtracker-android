@@ -77,7 +77,7 @@ public abstract class ExportTrackTask  extends AsyncTask<Void, Long, Boolean> {
 	/**
 	 * Date format for a point timestamp.
 	 */
-	private SimpleDateFormat pointDateFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+	private SimpleDateFormat pointDateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z");
 
 	/**
 	 * {@link Context} to get resources
