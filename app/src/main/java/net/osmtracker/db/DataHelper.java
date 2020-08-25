@@ -1,10 +1,5 @@
 package net.osmtracker.db;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
-
-import net.osmtracker.OSMTracker;
-
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -16,6 +11,11 @@ import android.net.Uri;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.util.Log;
+
+import net.osmtracker.OSMTracker;
+
+import java.io.File;
+import java.text.SimpleDateFormat;
 
 /**
  * Data helper for dialoging with content resolver and filesystem.
@@ -41,6 +41,16 @@ public class DataHelper {
 	 * JPG file extension
 	 */
 	public static final String EXTENSION_JPG = ".jpg";
+
+	/**
+	 * GPX Files MIME standard for sharing
+	 */
+	public static final String MIME_TYPE_GPX = "application/gpx+xml";
+
+	/**
+	 * APP sign plus FileProvider = authority
+	 */
+	public static final String FILE_PROVIDER_AUTHORITY = "net.osmtracker.fileprovider";
 
 	/**
 	 * Number of tries to rename a media file for the current track if there are
@@ -93,8 +103,10 @@ public class DataHelper {
 	 * @param accuracy
 	 * 			  accuracy of the compass reading (as SensorManager.SENSOR_STATUS_ACCURACY*),
 	 * 			  ignored if azimuth is invalid.
+	 * @param pressure
+	 *            atmospheric pressure
 	 */
-	public void track(long trackId, Location location, float azimuth, int accuracy) {
+	public void track(long trackId, Location location, float azimuth, int accuracy, float pressure) {
 		Log.v(TAG, "Tracking (trackId=" + trackId + ") location: " + location + " azimuth: " + azimuth + ", accuracy: " + accuracy);
 		ContentValues values = new ContentValues();
 		values.put(TrackContentProvider.Schema.COL_TRACK_ID, trackId);
@@ -123,7 +135,11 @@ public class DataHelper {
 			values.put(TrackContentProvider.Schema.COL_COMPASS, azimuth);
 			values.put(TrackContentProvider.Schema.COL_COMPASS_ACCURACY, accuracy);
 		}
-		
+
+		if (pressure != 0) {
+			values.put(TrackContentProvider.Schema.COL_ATMOSPHERIC_PRESSURE, pressure);
+		}
+
 		Uri trackUri = ContentUris.withAppendedId(TrackContentProvider.CONTENT_URI_TRACK, trackId);
 		contentResolver.insert(Uri.withAppendedPath(trackUri, TrackContentProvider.Schema.TBL_TRACKPOINT + "s"), values);
 	}
@@ -149,7 +165,7 @@ public class DataHelper {
 	 * 			  accuracy of the compass reading (as SensorManager.SENSOR_STATUS_ACCURACY*),
 	 * 			  ignored if azimuth is invalid.
 	 */
-	public void wayPoint(long trackId, Location location, int nbSatellites, String name, String link, String uuid, float azimuth, int accuracy) {
+	public void wayPoint(long trackId, Location location, int nbSatellites, String name, String link, String uuid, float azimuth, int accuracy, float pressure) {
 		Log.v(TAG, "Tracking waypoint '" + name + "', track=" + trackId + ", uuid=" + uuid + ", link='" + link + "', location=" + location + ", azimuth=" + azimuth + ", accuracy="+accuracy);
 
 		// location should not be null, but sometime is.
@@ -190,6 +206,10 @@ public class DataHelper {
 			if (azimuth >= AZIMUTH_MIN && azimuth < AZIMUTH_MAX) {
 				values.put(TrackContentProvider.Schema.COL_COMPASS, azimuth);
 				values.put(TrackContentProvider.Schema.COL_COMPASS_ACCURACY, accuracy);
+			}
+
+			if (pressure != 0) {
+				values.put(TrackContentProvider.Schema.COL_ATMOSPHERIC_PRESSURE, pressure);
 			}
 
 			Uri trackUri = ContentUris.withAppendedId(TrackContentProvider.CONTENT_URI_TRACK, trackId);
@@ -373,6 +393,38 @@ public class DataHelper {
 		
 		_return = new File(trackStorageDirectory);		
 		return _return;
+	}
+
+	public static File getGPXTrackFile(long trackId, ContentResolver contentResolver, Context context) {
+
+		String trackName = getTrackNameInDB(trackId, contentResolver);
+
+		File sdRoot = Environment.getExternalStorageDirectory();
+
+		// The location where the user has specified gpx files and associated content to be written
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+		String userGPXExportDirectoryName = prefs.getString(
+				OSMTracker.Preferences.KEY_STORAGE_DIR,	OSMTracker.Preferences.VAL_STORAGE_DIR);
+
+		// Build storage track path for file creation
+		String completeGPXTrackPath = sdRoot + userGPXExportDirectoryName.trim() +
+				File.separator + trackName.trim()  + File.separator +
+				trackName.trim() + DataHelper.EXTENSION_GPX;
+
+		return new File(completeGPXTrackPath);
+	}
+
+	public static String getTrackNameInDB(long trackId, ContentResolver contentResolver) {
+		String trackName = "";
+		Uri trackUri = ContentUris.withAppendedId(TrackContentProvider.CONTENT_URI_TRACK, trackId);
+		Cursor cursor = contentResolver.query(trackUri, null, null,
+				null, null);
+		if(cursor != null && cursor.moveToFirst()) {
+			trackName = cursor.getString(cursor.getColumnIndex(TrackContentProvider.Schema.COL_NAME));
+			cursor.close();
+		}
+
+		return trackName;
 	}
 
 }
